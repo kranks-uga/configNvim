@@ -193,7 +193,6 @@ nvim hello.cpp
 
 ## 📚 Документация
 
-- **[CLAUDE.md](./CLAUDE.md)** - полная документация по конфигу
 - **[install.sh](./install.sh)** - скрипт автоматической установки
 
 ## ❓ Troubleshooting
@@ -213,8 +212,6 @@ nvim --headless "+Lazy! sync" +qa
 ```vim
 :checkhealth   " Диагностика
 ```
-
-Полный список решений в [CLAUDE.md](./CLAUDE.md#troubleshooting)
 
 ## 🔧 Системные требования
 
