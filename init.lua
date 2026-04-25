@@ -30,7 +30,6 @@ vim.opt.smartcase = true        -- Умный поиск с учетом рег�
 
 -- Прочее
 vim.opt.mouse = 'a'             -- Мышь во всех режимах
-vim.opt.hidden = true           -- Фоновые буферы
 vim.opt.clipboard = "unnamedplus" -- Общий буфер обмена с системой
 vim.opt.updatetime = 250        -- Быстрое обновление
 vim.opt.timeoutlen = 300        -- Время ожидания команд
@@ -47,7 +46,7 @@ vim.opt.backup = false
 --  Установка плагинов (Lazy.nvim)
 -- =============================================
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then
+if not vim.uv.fs_stat(lazypath) then
   vim.fn.system({
     "git",
     "clone",
@@ -219,6 +218,47 @@ require("lazy").setup({
       "williamboman/mason-lspconfig.nvim",
       "hrsh7th/cmp-nvim-lsp",
     },
+    config = function()
+      local cmp_nvim_lsp = require('cmp_nvim_lsp')
+
+      vim.lsp.config('*', {
+        capabilities = cmp_nvim_lsp.default_capabilities(),
+      })
+
+      vim.lsp.config('clangd', {
+        cmd = {
+          "clangd",
+          "--background-index",
+          "--clang-tidy",
+          "--header-insertion=iwyu",
+          "--completion-style=detailed",
+          "--function-arg-placeholders",
+        },
+        init_options = {
+          clangdFileStatus = true,
+          usePlaceholders = true,
+          completeUnimported = true,
+          semanticHighlighting = true,
+        },
+      })
+
+      vim.lsp.enable('clangd')
+
+      vim.diagnostic.config({
+        virtual_text = { prefix = '●', source = "if_many" },
+        float = { source = "always", border = "rounded" },
+        signs = true,
+        underline = true,
+        update_in_insert = false,
+        severity_sort = true,
+      })
+
+      local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
+      for type, icon in pairs(signs) do
+        local hl = "DiagnosticSign" .. type
+        vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
+      end
+    end,
   },
 
   -- Mason - менеджер LSP серверов
@@ -355,20 +395,11 @@ require("lazy").setup({
     "nvim-treesitter/nvim-treesitter",
     build = ":TSUpdate",
     event = { "BufReadPost", "BufNewFile" },
-    opts = {
-      ensure_installed = { "c", "cpp", "lua", "python", "bash", "json", "markdown" },
-      highlight = { enable = true },
-      indent = { enable = true },
-      incremental_selection = {
-        enable = true,
-        keymaps = {
-          init_selection = "<C-space>",
-          node_incremental = "<C-space>",
-          scope_incremental = false,
-          node_decremental = "<bs>",
-        },
-      },
-    },
+    config = function()
+      require('nvim-treesitter').install({
+        'c', 'cpp', 'lua', 'python', 'bash', 'json', 'markdown',
+      })
+    end,
   },
 
   -- =============================================
@@ -434,10 +465,6 @@ require("lazy").setup({
   {
     "folke/which-key.nvim",
     event = "VeryLazy",
-    init = function()
-      vim.o.timeout = true
-      vim.o.timeoutlen = 300
-    end,
     opts = {},
   },
 }, {
@@ -458,84 +485,28 @@ require("lazy").setup({
 })
 
 -- =============================================
---  Настройка LSP
+--  LSP горячие клавиши (через LspAttach)
 -- =============================================
-local lspconfig = require('lspconfig')
-local cmp_nvim_lsp = require('cmp_nvim_lsp')
-
--- Capabilities для автодополнения
-local capabilities = cmp_nvim_lsp.default_capabilities()
-
--- Функция для настройки LSP горячих клавиш
-local function on_attach(client, bufnr)
-  local opts = { noremap = true, silent = true, buffer = bufnr }
-
-  -- Навигация
-  vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-  vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
-  vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
-  vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
-  vim.keymap.set('n', 'gt', vim.lsp.buf.type_definition, opts)
-
-  -- Документация и помощь
-  vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
-  vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
-
-  -- Действия с кодом
-  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)
-  vim.keymap.set({'n', 'v'}, '<leader>ca', vim.lsp.buf.code_action, opts)
-  vim.keymap.set('n', '<leader>f', function()
-    vim.lsp.buf.format({ async = true })
-  end, opts)
-
-  -- Диагностика
-  vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, opts)
-  vim.keymap.set('n', ']d', vim.diagnostic.goto_next, opts)
-  vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, opts)
-end
-
--- Настройка clangd для C++
-lspconfig.clangd.setup({
-  capabilities = capabilities,
-  on_attach = on_attach,
-  cmd = {
-    "clangd",
-    "--background-index",
-    "--clang-tidy",
-    "--header-insertion=iwyu",
-    "--completion-style=detailed",
-    "--function-arg-placeholders",
-  },
-  init_options = {
-    clangdFileStatus = true,
-    usePlaceholders = true,
-    completeUnimported = true,
-    semanticHighlighting = true,
-  },
+vim.api.nvim_create_autocmd('LspAttach', {
+  callback = function(args)
+    local opts = { noremap = true, silent = true, buffer = args.buf }
+    vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
+    vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+    vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
+    vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
+    vim.keymap.set('n', 'gt', vim.lsp.buf.type_definition, opts)
+    vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
+    vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
+    vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)
+    vim.keymap.set({'n', 'v'}, '<leader>ca', vim.lsp.buf.code_action, opts)
+    vim.keymap.set('n', '<leader>f', function()
+      vim.lsp.buf.format({ async = true })
+    end, opts)
+    vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, opts)
+    vim.keymap.set('n', ']d', vim.diagnostic.goto_next, opts)
+    vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, opts)
+  end,
 })
-
--- Настройка диагностики
-vim.diagnostic.config({
-  virtual_text = {
-    prefix = '●',
-    source = "if_many",
-  },
-  float = {
-    source = "always",
-    border = "rounded",
-  },
-  signs = true,
-  underline = true,
-  update_in_insert = false,
-  severity_sort = true,
-})
-
--- Иконки для диагностики
-local signs = { Error = " ", Warn = " ", Hint = " ", Info = " " }
-for type, icon in pairs(signs) do
-  local hl = "DiagnosticSign" .. type
-  vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = hl })
-end
 
 -- =============================================
 --  Пользовательские горячие клавиши
