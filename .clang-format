@@ -1,0 +1,4 @@
+# Стиль по умолчанию для C/C++, если у проекта нет своего .clang-format
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100

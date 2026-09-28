@@ -1,187 +1,181 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 # =============================================
-# Скрипт автоматической установки Neovim конфигурации
+#  Установка конфигурации Neovim для C / C++ / Rust / ASM
+#  Использование: ./install.sh        (с вопросами)
+#                 ./install.sh -y     (без вопросов)
 # =============================================
+set -euo pipefail
 
-set -e  # Остановить при ошибке
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+step() { echo -e "\n${BLUE}==>${NC} $1"; }
+ok()   { echo -e "${GREEN}✓${NC} $1"; }
+warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+err()  { echo -e "${RED}✗${NC} $1"; }
+has()  { command -v "$1" &>/dev/null; }
 
-# Цвета для вывода
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # Без цвета
-
-# Функция для красивого вывода
-print_step() {
-    echo -e "${BLUE}==>${NC} $1"
+YES=0
+[[ "${1:-}" == "-y" ]] && YES=1
+ask() { # ask "вопрос" -> 0 если да
+    [[ $YES == 1 ]] && return 0
+    read -r -p "$1 (y/n) " -n 1 REPLY; echo
+    [[ $REPLY =~ ^[YyДд]$ ]]
 }
 
-print_success() {
-    echo -e "${GREEN}✓${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}✗${NC} $1"
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NVIM_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
+MISSING_PKGS=()
 
 echo -e "${GREEN}"
-echo "╔════════════════════════════════════════╗"
-echo "║  Установка Neovim конфигурации для C++ ║"
-echo "╔════════════════════════════════════════╝"
+echo "╔══════════════════════════════════════════════╗"
+echo "║  Neovim: C · C++ · Rust · ASM — установка    ║"
+echo "╚══════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# =============================================
-# 1. Проверка требований
-# =============================================
-print_step "Проверка установленных зависимостей..."
+# ---------------------------------------------
+# 1. Обязательные зависимости
+# ---------------------------------------------
+step "Проверка обязательных зависимостей"
 
-# Проверка Neovim
-if ! command -v nvim &> /dev/null; then
-    print_error "Neovim не установлен!"
-    echo "Установите Neovim:"
-    echo "  Arch Linux: sudo pacman -S neovim"
-    echo "  Ubuntu/Debian: sudo apt install neovim"
+if ! has nvim; then
+    err "Neovim не установлен: sudo pacman -S neovim"
+    exit 1
+fi
+NVIM_VERSION=$(nvim --version | head -n1 | sed 's/^NVIM v//')
+NVIM_MINOR=$(echo "$NVIM_VERSION" | cut -d. -f2)
+NVIM_MAJOR=$(echo "$NVIM_VERSION" | cut -d. -f1)
+if [[ $NVIM_MAJOR -eq 0 && $NVIM_MINOR -lt 12 ]]; then
+    err "Нужен Neovim 0.12+, установлен $NVIM_VERSION"
+    exit 1
+fi
+ok "Neovim $NVIM_VERSION"
+
+FATAL=0
+for bin in git curl tar unzip gcc make; do
+    if has $bin; then ok "$bin"; else err "$bin не найден"; FATAL=1; fi
+done
+if [[ $FATAL == 1 ]]; then
+    echo "Установите недостающее: sudo pacman -S git curl tar unzip gcc make"
     exit 1
 fi
 
-NVIM_VERSION=$(nvim --version | head -n1 | awk '{print $2}')
-NVIM_MAJOR=$(echo $NVIM_VERSION | cut -d. -f2)
+# ---------------------------------------------
+# 2. Необязательные (нужны для отдельных языков / функций)
+# ---------------------------------------------
+step "Проверка инструментов для языков"
+check_opt() { # check_opt бинарник пакет-pacman "зачем"
+    if has "$1"; then ok "$1"; else warn "$1 не найден — $3"; MISSING_PKGS+=("$2"); fi
+}
+check_opt g++    gcc      "компиляция C++"
+check_opt gdb    gdb      "отладка ASM"
+check_opt nasm   nasm     "сборка NASM"
+check_opt rg     ripgrep  "поиск текста по проекту (Space fg)"
+check_opt fzf    fzf      "быстрый нечёткий поиск"
+check_opt cargo  rustup   "Rust (и установка tree-sitter CLI)"
+check_opt go     go       "установка nasmfmt (форматирование ASM)"
 
-if [ "$NVIM_MAJOR" -lt 8 ]; then
-    print_error "Neovim версии $NVIM_VERSION слишком старый!"
-    print_error "Требуется Neovim 0.8 или новее"
-    exit 1
-fi
+# ---------------------------------------------
+# 3. Копирование конфигурации
+# ---------------------------------------------
+step "Копирование конфигурации в $NVIM_CONFIG"
 
-print_success "Neovim установлен (версия $NVIM_VERSION)"
-
-if [ "$NVIM_MAJOR" -ge 11 ]; then
-    print_success "Используется современный Neovim 0.11+ с новым API"
-fi
-
-# Проверка Git
-if ! command -v git &> /dev/null; then
-    print_error "Git не установлен!"
-    echo "Установите Git: sudo pacman -S git"
-    exit 1
-fi
-print_success "Git установлен"
-
-# Проверка clangd (опционально)
-if ! command -v clangd &> /dev/null; then
-    print_warning "clangd не установлен (нужен для C++ LSP)"
-    read -p "Установить clangd сейчас? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if command -v pacman &> /dev/null; then
-            sudo pacman -S clang
-        elif command -v apt &> /dev/null; then
-            sudo apt install clangd
+if [[ "$(realpath "$SCRIPT_DIR")" == "$(realpath -m "$NVIM_CONFIG")" ]]; then
+    ok "Репозиторий уже склонирован в $NVIM_CONFIG — копировать не нужно"
+else
+    if [[ -e "$NVIM_CONFIG" ]]; then
+        BACKUP="$NVIM_CONFIG.backup.$(date +%Y%m%d_%H%M%S)"
+        warn "Найдена существующая конфигурация"
+        if ask "Переместить её в $BACKUP и продолжить?"; then
+            mv "$NVIM_CONFIG" "$BACKUP"
+            ok "Бэкап: $BACKUP"
         else
-            print_warning "Установите clangd вручную для вашей системы"
+            err "Установка отменена"; exit 1
         fi
     fi
-else
-    print_success "clangd установлен"
+    mkdir -p "$NVIM_CONFIG"
+    cp -r "$SCRIPT_DIR"/{init.lua,lua,tutor,CHEATSHEET.md,.clang-format,lazy-lock.json} "$NVIM_CONFIG/"
+    ok "Файлы скопированы"
 fi
 
-# =============================================
-# 2. Бэкап существующей конфигурации
-# =============================================
-NVIM_CONFIG="$HOME/.config/nvim"
-BACKUP_DIR="$HOME/.config/nvim.backup.$(date +%Y%m%d_%H%M%S)"
+# Конфиг asm-lsp: NASM x86-64
+ASM_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/asm-lsp/.asm-lsp.toml"
+if [[ -f "$ASM_CFG" ]] && ! cmp -s "$ASM_CFG" "$SCRIPT_DIR/extras/asm-lsp.toml"; then
+    warn "$ASM_CFG уже существует — не трогаю"
+else
+    mkdir -p "$(dirname "$ASM_CFG")"
+    cp "$SCRIPT_DIR/extras/asm-lsp.toml" "$ASM_CFG"
+    ok "Конфиг asm-lsp: $ASM_CFG"
+fi
 
-if [ -d "$NVIM_CONFIG" ]; then
-    print_warning "Найдена существующая конфигурация Neovim"
-    read -p "Создать бэкап и продолжить? (y/n) " -n 1 -r
+# ---------------------------------------------
+# 4. Инструменты, которые ставятся без sudo
+# ---------------------------------------------
+step "Установка инструментов (без sudo)"
+
+if has rustup; then
+    rustup component add rust-analyzer rustfmt clippy >/dev/null 2>&1 \
+        && ok "rust-analyzer, rustfmt, clippy (rustup)" \
+        || warn "rustup не смог поставить rust-analyzer"
+fi
+
+if has tree-sitter; then
+    ok "tree-sitter CLI"
+elif has cargo; then
+    echo "   Сборка tree-sitter CLI (пара минут)..."
+    cargo install --locked tree-sitter-cli >/dev/null 2>&1 && ok "tree-sitter CLI (cargo)" \
+        || { warn "Не удалось собрать tree-sitter CLI"; MISSING_PKGS+=("tree-sitter-cli"); }
+else
+    warn "tree-sitter CLI нужен для подсветки синтаксиса"
+    MISSING_PKGS+=("tree-sitter-cli")
+fi
+
+if has nasmfmt || [[ -x "$HOME/go/bin/nasmfmt" ]]; then
+    ok "nasmfmt"
+elif has go; then
+    go install github.com/yamnikov-oleg/nasmfmt@latest >/dev/null 2>&1 && ok "nasmfmt (go)" \
+        || warn "Не удалось поставить nasmfmt"
+fi
+
+# ---------------------------------------------
+# 5. Плагины, парсеры, LSP-серверы
+# ---------------------------------------------
+step "Установка плагинов (lazy.nvim, версии из lazy-lock.json)"
+nvim --headless "+Lazy! restore" +qa >/dev/null 2>&1 && ok "Плагины" || { err "Ошибка установки плагинов"; exit 1; }
+
+step "Установка парсеров tree-sitter"
+nvim --headless \
+    -c "lua require('nvim-treesitter').install({'c','cpp','rust','asm','nasm','lua','vim','vimdoc','query','bash','make','cmake','toml','json','yaml','markdown','markdown_inline'}):wait(600000)" \
+    -c qa >/dev/null 2>&1 && ok "Парсеры" || warn "Часть парсеров не установилась — повторите :TSUpdate"
+
+step "Установка LSP-серверов через Mason (clangd, clang-format, asm-lsp, codelldb, lua_ls)"
+for attempt in 1 2; do
+    nvim --headless -c "Lazy load mason-tool-installer.nvim" -c "MasonToolsInstallSync" -c qa >/dev/null 2>&1 || true
+    MASON_BIN="$(nvim --headless -c 'lua io.stdout:write(vim.fn.stdpath("data"))' -c qa 2>/dev/null)/mason/bin"
+    MISSING_TOOLS=()
+    for t in clangd clang-format asm-lsp codelldb lua-language-server; do
+        [[ -e "$MASON_BIN/$t" ]] || MISSING_TOOLS+=("$t")
+    done
+    [[ ${#MISSING_TOOLS[@]} -eq 0 ]] && break
+done
+if [[ ${#MISSING_TOOLS[@]} -eq 0 ]]; then
+    ok "Все LSP-серверы и отладчик установлены"
+else
+    warn "Не установились: ${MISSING_TOOLS[*]} — откройте nvim и выполните :MasonToolsInstall"
+fi
+
+# ---------------------------------------------
+# Итог
+# ---------------------------------------------
+echo
+echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║           Установка завершена 🎉              ║${NC}"
+echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
+if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        print_step "Создание бэкапа в $BACKUP_DIR"
-        mv "$NVIM_CONFIG" "$BACKUP_DIR"
-        print_success "Бэкап создан: $BACKUP_DIR"
-    else
-        print_error "Установка отменена"
-        exit 1
-    fi
+    warn "Для полной функциональности доустановите:"
+    echo "   sudo pacman -S ${MISSING_PKGS[*]}"
 fi
-
-# =============================================
-# 3. Копирование конфигурации
-# =============================================
-print_step "Копирование конфигурации в ~/.config/nvim..."
-
-# Создаем директорию
-mkdir -p "$NVIM_CONFIG"
-
-# Копируем файлы из текущей директории
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cp "$SCRIPT_DIR/init.lua" "$NVIM_CONFIG/"
-
-# Копируем дополнительные файлы если есть
-[ -f "$SCRIPT_DIR/coc-settings.json" ] && cp "$SCRIPT_DIR/coc-settings.json" "$NVIM_CONFIG/"
-[ -f "$SCRIPT_DIR/CLAUDE.md" ] && cp "$SCRIPT_DIR/CLAUDE.md" "$NVIM_CONFIG/"
-[ -f "$SCRIPT_DIR/QUICKSTART.md" ] && cp "$SCRIPT_DIR/QUICKSTART.md" "$NVIM_CONFIG/"
-
-print_success "Файлы скопированы"
-
-# =============================================
-# 4. Установка плагинов
-# =============================================
-print_step "Установка плагинов через Lazy.nvim..."
-echo "Это может занять несколько минут..."
-
-nvim --headless "+Lazy! sync" +qa
-
-if [ $? -eq 0 ]; then
-    print_success "Плагины установлены"
-else
-    print_error "Ошибка при установке плагинов"
-    exit 1
-fi
-
-# =============================================
-# 5. Проверка установки
-# =============================================
-print_step "Проверка установки..."
-
-if [ -f "$NVIM_CONFIG/init.lua" ]; then
-    print_success "init.lua на месте"
-else
-    print_error "init.lua не найден!"
-    exit 1
-fi
-
-# =============================================
-# Готово!
-# =============================================
 echo
-echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║     Установка завершена успешно! 🎉    ║${NC}"
-echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
-echo
-echo "Запустите Neovim командой: nvim"
-echo
-echo "Полезные команды:"
-echo "  :Lazy          - Управление плагинами"
-echo "  :Mason         - Управление LSP серверами"
-echo "  :checkhealth   - Проверка здоровья Neovim"
-echo
-echo "Горячие клавиши:"
-echo "  ,e             - Открыть дерево файлов"
-echo "  ,ff            - Поиск файлов"
-echo "  ,fg            - Поиск по тексту"
-echo "  F5             - Компилировать и запустить C++ (в .cpp файле)"
-echo "  gd             - Перейти к определению"
-echo "  K              - Показать документацию"
-echo
-echo "📚 Документация:"
-echo "  - QUICKSTART.md  - Быстрый старт для новичков"
-echo "  - CLAUDE.md      - Полная документация"
-echo "  - README.md      - Описание проекта"
-echo
+echo "Запуск:       nvim"
+echo "Шпаргалка:    Space ?   (внутри nvim)"
+echo "Учебник:      :Tutor"
+echo "Подробнее:    QUICKSTART.md, README.md"

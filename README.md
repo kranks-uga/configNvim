@@ -1,233 +1,147 @@
-# 🚀 Профессиональная конфигурация Neovim для C++
+# Конфигурация Neovim для C / C++ / Rust / ASM
 
-![Neovim](https://img.shields.io/badge/Neovim-0.11+-green.svg)
+![Neovim](https://img.shields.io/badge/Neovim-0.12+-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-Linux-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-Современная, полнофункциональная конфигурация Neovim с VS Code-подобным опытом разработки.
+Модульная конфигурация Neovim для системного программирования: анализ кода, автодополнение,
+форматирование, сборка и отладка для четырёх языков. Комментарии и подсказки — на русском.
 
-## ✨ Возможности
+## Возможности
 
-### 🎨 Современный UI
-- **Tokyonight Storm** тема с синими акцентами
-- **Bufferline** для вкладок
-- **Lualine** statusline с Git и LSP интеграцией
-- **Indent guides** для визуализации вложенности
-- Подсветка hex цветов в реальном времени
+| | C / C++ | Rust | ASM (NASM x86-64) |
+|---|---|---|---|
+| Анализ кода, переходы, ошибки | clangd + clang-tidy | rust-analyzer + clippy | asm-lsp |
+| Форматирование при сохранении | clang-format | rustfmt | nasmfmt |
+| Сборка и запуск (`Space r`) | gcc / g++ / make | cargo / rustc | nasm + ld / gcc |
+| Отладчик | codelldb | codelldb | gdb |
 
-### 💡 Умная разработка
-- **Full LSP support** для C++ через clangd
-- **Автодополнение** с иконками и приоритетами
-- **Snippets** (готовая библиотека для C++)
-- **Treesitter** подсветка синтаксиса
-- **Auto-pairs** для скобок
-- **TODO подсветка** (TODO, FIXME, NOTE, etc)
+А также:
+- **Автодополнение** — blink.cmp со сниппетами и подсказкой сигнатур
+- **Подсветка** — tree-sitter
+- **Поиск** — Telescope (файлы, текст по проекту, символы, диагностика)
+- **Дерево файлов** — neo-tree
+- **Git** — gitsigns (изменения на полях, blame, откат)
+- **Подсказки клавиш** — which-key: нажмите `Space` и подождите
+- **Шпаргалка** — `Space ?`
+- **Русский `:Tutor`** — интерактивный учебник Vim на русском
 
-### 🔍 Навигация
-- **Telescope** fuzzy finder (файлы, grep, буферы)
-- **NvimTree** файловый менеджер
-- **LSP навигация** (go to definition, references, etc)
-- **Git signs** в gutter
-- **Which-key** подсказки для горячих клавиш
-
-### 🎯 C++ Workflow
-- **F5** - компиляция и запуск (релиз)
-- **F6** - только компиляция
-- **F7** - debug сборка и запуск
-- Умные LSP подсказки и автодополнение
-- Форматирование кода через clangd
-
-## 🛠 Установка
-
-### Требования
-- **Neovim 0.11+** (обязательно!)
-- **Git**
-- **clangd** (для C++ LSP)
-- **make** (для telescope-fzf-native)
-- **g++** или **clang** (для компиляции C++)
-
-### Автоматическая установка (рекомендуется)
+## Установка
 
 ```bash
 git clone https://github.com/kranks-uga/configNvim.git
 cd configNvim
-./install.sh
+./install.sh          # или ./install.sh -y — без вопросов
 ```
 
-Скрипт автоматически:
-- ✅ Проверит все зависимости
-- ✅ Создаст бэкап существующей конфигурации
-- ✅ Установит все плагины
-- ✅ Предложит установить clangd
+Скрипт:
+- проверит зависимости и сделает бэкап существующего `~/.config/nvim`;
+- скопирует конфиг и настройку asm-lsp (`~/.config/asm-lsp/.asm-lsp.toml`);
+- **без sudo** поставит rust-analyzer (rustup), tree-sitter CLI (cargo), nasmfmt (go);
+- поставит плагины (версии из `lazy-lock.json`), парсеры tree-sitter и LSP-серверы через Mason;
+- в конце подскажет, какие системные пакеты стоит доустановить.
 
-### Ручная установка
+Можно и без скрипта — склонировать прямо в `~/.config/nvim` и запустить `./install.sh` оттуда.
+
+### Требования
+
+| Обязательно | Для отдельных языков |
+|---|---|
+| Neovim **0.12+**, git, curl, tar, unzip, gcc, make | g++, nasm, gdb, rustup, go, ripgrep, fzf |
+
+Шрифт с иконками: любой [Nerd Font](https://www.nerdfonts.com/) (например, FiraCode Nerd Font).
 
 ```bash
-# Клонировать репозиторий
-git clone https://github.com/kranks-uga/configNvim.git ~/.config/nvim
-
-# Установить плагины
-nvim --headless "+Lazy! sync" +qa
-
-# Установить clangd (Arch Linux)
-sudo pacman -S clang
-
-# Или Ubuntu/Debian
-sudo apt install clangd
+sudo pacman -S neovim git gcc make unzip nasm gdb rustup go ripgrep fzf tree-sitter-cli
 ```
 
-## ⌨️ Основные горячие клавиши
+## Основные клавиши
 
-Leader key: **`,`** (запятая)
+Leader — **Space** (пробел). Полный список: `Space ?` внутри nvim.
 
-### Навигация по файлам
+### Файлы и поиск
 | Клавиша | Действие |
-|---------|----------|
-| `,e` | Открыть/закрыть файловое дерево |
-| `,ff` | Найти файл |
-| `,fg` | Поиск по содержимому |
-| `,fb` | Список открытых буферов |
-| `Tab` / `Shift-Tab` | Следующий/предыдущий буфер |
+|---|---|
+| `Space Space` / `Space ff` | Найти файл |
+| `Space fg` | Поиск текста по проекту |
+| `Space fr` | Недавние файлы |
+| `Space n` | Дерево файлов |
+| `Shift-h` / `Shift-l` | Предыдущий / следующий буфер |
+| `Space x` | Закрыть буфер |
+| `Ctrl-\` | Плавающий терминал |
 
-### LSP (в C++ файлах)
+### Код
 | Клавиша | Действие |
-|---------|----------|
+|---|---|
 | `gd` | Перейти к определению |
-| `gr` | Показать все ссылки |
-| `K` | Показать документацию |
-| `,rn` | Переименовать символ |
-| `,ca` | Code actions |
-| `,f` | Форматировать код |
+| `grr` | Где используется |
+| `K` | Документация (в ASM — описание инструкции) |
+| `grn` | Переименовать |
+| `gra` | Quick fix / действия |
+| `Space e` | Текст ошибки под курсором |
+| `]d` / `[d` | Следующая / предыдущая ошибка |
+| `Space tt` | Все ошибки проекта |
+| `Space co` | Переключить `.h` ↔ `.cpp` |
+| `Space cf` | Отформатировать |
+| `Space cF` | Вкл/выкл автоформат при сохранении |
 
-### C++ компиляция
+### Сборка и отладка
 | Клавиша | Действие |
-|---------|----------|
-| `F5` | Компилировать и запустить |
-| `F6` | Только компилировать |
-| `F7` | Debug сборка с `-g -DDEBUG` |
+|---|---|
+| `Space r` | Собрать и запустить текущий файл |
+| `Space b` | Только собрать |
+| `Space db` | Точка останова |
+| `F5` | Старт / продолжить отладку |
+| `F10` / `F11` / `F12` | Шаг через / внутрь / наружу |
+| `Space de` | Значение выражения |
 
-### Редактирование
-| Клавиша | Действие |
-|---------|----------|
-| `,w` | Сохранить |
-| `gcc` | Закомментировать строку |
-| `gc` (visual) | Закомментировать выделение |
-| `J` / `K` (visual) | Переместить строки вверх/вниз |
+**Как собирается файл (`Space r`):**
+- **C** — `gcc -std=c17 -g -O0 -Wall -Wextra`, **C++** — `g++ -std=c++23 ...`. Если выше по дереву есть `Makefile` — `make` и `make run`.
+- **Rust** — `cargo run`, если есть `Cargo.toml`, иначе `rustc -g`.
+- **NASM** — `nasm -f elf64 -g -F dwarf`, затем `ld` (точка входа `_start`) или `gcc -no-pie`, если в файле есть `main`.
+- **GAS** (`.s`, `.S`) — `gcc -g -no-pie`.
 
-**Полный список** горячих клавиш смотрите в [CLAUDE.md](./CLAUDE.md)
+Бинарник кладётся рядом с исходником, с отладочной информацией, — после `Space b` сразу можно `F5`.
 
-## 📦 Установленные плагины
+## Структура
 
-<details>
-<summary>Нажмите для просмотра полного списка (18 плагинов)</summary>
-
-### UI
-- tokyonight.nvim
-- lualine.nvim
-- bufferline.nvim
-- indent-blankline.nvim
-- nvim-web-devicons
-- nvim-colorizer.lua
-
-### Навигация
-- nvim-tree.lua
-- telescope.nvim
-- telescope-fzf-native.nvim
-
-### LSP & Автодополнение
-- nvim-lspconfig
-- mason.nvim
-- mason-lspconfig.nvim
-- nvim-cmp (+ источники: lsp, buffer, path, luasnip)
-- LuaSnip
-- friendly-snippets
-
-### Подсветка и парсинг
-- nvim-treesitter
-
-### Утилиты
-- nvim-autopairs
-- Comment.nvim
-- gitsigns.nvim
-- todo-comments.nvim
-- which-key.nvim
-
-</details>
-
-## 🎨 Скриншоты
-
-> *TODO: Добавьте скриншот вашего рабочего окружения в `screenshot.png`*
-
-## ⚙️ Настройка
-
-Вся конфигурация находится в одном файле: **`init.lua`**
-
-```bash
-# Редактировать конфиг
-nvim ~/.config/nvim/init.lua
-
-# Перезагрузить после изменений
-:source %
+```
+init.lua                 точка входа
+lua/config/
+  options.lua            настройки редактора, диагностика, типы файлов
+  keymaps.lua            общие клавиши
+  autocmds.lua           автокоманды (отступы для ASM и т.п.)
+  runner.lua             сборка и запуск текущего файла
+  lazy.lua               загрузка lazy.nvim
+lua/plugins/
+  ui.lua                 тема, статус-строка, which-key, neo-tree, терминал, trouble
+  editor.lua             telescope, tree-sitter, gitsigns, autopairs, surround
+  lsp.lua                Mason, LSP-серверы, автодополнение, форматирование
+  dap.lua                отладчик
+.clang-format            стиль C/C++ по умолчанию (LLVM, отступ 4)
+extras/asm-lsp.toml      конфиг asm-lsp (NASM, x86-64)
+tutor/ru/                русский :Tutor
+CHEATSHEET.md            шпаргалка (Space ?)
 ```
 
-Подробная документация по модификации конфига в [CLAUDE.md](./CLAUDE.md)
+## Настройка под себя
 
-## 🚀 Быстрый старт
+- **Стиль C/C++** — `.clang-format` в конфиге. Если в проекте есть свой `.clang-format`, используется он.
+- **Ассемблер GAS вместо NASM** — положите в корень проекта `.asm-lsp.toml` с `assembler = "gas"`.
+- **Проекты на CMake** — clangd нужен `compile_commands.json`:
+  `cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && ln -s build/compile_commands.json .`
 
-После установки:
+## Если что-то не работает
 
-```bash
-# Запустить Neovim
-nvim
-
-# Открыть файл
-nvim hello.cpp
-```
-
-Внутри Neovim:
 ```vim
-:Lazy          " Проверить плагины
-:Mason         " Проверить LSP серверы
-:checkhealth   " Проверить здоровье системы
+:checkhealth           " общая диагностика
+:checkhealth vim.lsp   " LSP-серверы
+:Mason                 " установленные серверы
+:MasonToolsInstall     " доустановить недостающие
+:Lazy                  " плагины
+:TSUpdate              " парсеры tree-sitter
 ```
 
-## 📚 Документация
+## Лицензия
 
-- **[install.sh](./install.sh)** - скрипт автоматической установки
-
-## ❓ Troubleshooting
-
-### LSP не работает
-```vim
-:LspInfo       " Проверить статус
-:Mason         " Установить clangd
-```
-
-### Плагины не загружаются
-```bash
-nvim --headless "+Lazy! sync" +qa
-```
-
-### Ошибки при запуске
-```vim
-:checkhealth   " Диагностика
-```
-
-## 🔧 Системные требования
-
-- **OS**: Linux (Arch, Ubuntu, Debian)
-- **Neovim**: 0.11 или новее
-- **Память**: ~100MB для всех плагинов
-- **Время запуска**: ~30-50ms
-
-## 📄 Лицензия
-
-MIT License - используйте свободно!
-
-## 🤝 Вклад
-
-Найдены баги или есть идеи? Открывайте issues!
-
----
-
-
+MIT. Русский перевод `:Tutor` (`tutor/ru/`) взят из дистрибутива Vim и распространяется на условиях лицензии Vim.
