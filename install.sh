@@ -20,10 +20,17 @@ ask() { # ask "вопрос" -> 0 если да
     read -r -p "$1 (y/n) " -n 1 REPLY; echo
     [[ $REPLY =~ ^[YyДд]$ ]]
 }
+pacman_install() { # pacman_install пакет... -> 0 если установлено
+    has pacman || return 1
+    ask "Установить через sudo pacman: $*?" || return 1
+    sudo pacman -S --needed --noconfirm "$@" && hash -r
+}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NVIM_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
 MISSING_PKGS=()
+# cargo/go кладут бинарники сюда; оболочка (например, fish) может их не добавлять
+export PATH="$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
 echo -e "${GREEN}"
 echo "╔══════════════════════════════════════════════╗"
@@ -37,8 +44,8 @@ echo -e "${NC}"
 step "Проверка обязательных зависимостей"
 
 if ! has nvim; then
-    err "Neovim не установлен: sudo pacman -S neovim"
-    exit 1
+    err "Neovim не установлен"
+    pacman_install neovim || exit 1
 fi
 NVIM_VERSION=$(nvim --version | head -n1 | sed 's/^NVIM v//')
 NVIM_MINOR=$(echo "$NVIM_VERSION" | cut -d. -f2)
@@ -54,8 +61,10 @@ for bin in git curl tar unzip gcc make; do
     if has $bin; then ok "$bin"; else err "$bin не найден"; FATAL=1; fi
 done
 if [[ $FATAL == 1 ]]; then
-    echo "Установите недостающее: sudo pacman -S git curl tar unzip gcc make"
-    exit 1
+    pacman_install git curl tar unzip gcc make || {
+        echo "Установите недостающее: sudo pacman -S git curl tar unzip gcc make"
+        exit 1
+    }
 fi
 
 # ---------------------------------------------
@@ -72,6 +81,26 @@ check_opt rg     ripgrep  "поиск текста по проекту (Space fg
 check_opt fzf    fzf      "быстрый нечёткий поиск"
 check_opt cargo  rustup   "Rust (и установка tree-sitter CLI)"
 check_opt go     go       "установка nasmfmt (форматирование ASM)"
+check_opt tree-sitter tree-sitter-cli "сборка парсеров для подсветки синтаксиса"
+# rust-analyzer: с rustup ставится как компонент (шаг 4), без него — пакетом
+if ! has rustup && [[ ! " ${MISSING_PKGS[*]} " == *" rustup "* ]]; then
+    check_opt rust-analyzer rust-analyzer "анализ кода Rust"
+fi
+
+if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
+    step "Установка системных пакетов"
+    if pacman_install "${MISSING_PKGS[@]}"; then
+        ok "Установлено: ${MISSING_PKGS[*]}"
+        MISSING_PKGS=()
+        # свежий rustup ещё без тулчейна — без него нет cargo
+        if has rustup && ! has cargo; then
+            rustup default stable >/dev/null 2>&1 && ok "Rust stable (rustup)" \
+                || warn "rustup default stable не удался"
+        fi
+    else
+        warn "Пропускаю — список будет в конце"
+    fi
+fi
 
 # ---------------------------------------------
 # 3. Копирование конфигурации
@@ -121,11 +150,16 @@ if has tree-sitter; then
     ok "tree-sitter CLI"
 elif has cargo; then
     echo "   Сборка tree-sitter CLI (пара минут)..."
-    cargo install --locked tree-sitter-cli >/dev/null 2>&1 && ok "tree-sitter CLI (cargo)" \
-        || { warn "Не удалось собрать tree-sitter CLI"; MISSING_PKGS+=("tree-sitter-cli"); }
+    if cargo install --locked tree-sitter-cli >/dev/null 2>&1; then
+        ok "tree-sitter CLI (cargo)"
+        REST=()
+        for p in "${MISSING_PKGS[@]}"; do [[ $p == tree-sitter-cli ]] || REST+=("$p"); done
+        MISSING_PKGS=("${REST[@]}")
+    else
+        warn "Не удалось собрать tree-sitter CLI"
+    fi
 else
     warn "tree-sitter CLI нужен для подсветки синтаксиса"
-    MISSING_PKGS+=("tree-sitter-cli")
 fi
 
 if has nasmfmt || [[ -x "$HOME/go/bin/nasmfmt" ]]; then
