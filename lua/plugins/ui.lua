@@ -1,72 +1,66 @@
 return {
-  -- Тема
   {
     "folke/tokyonight.nvim",
     lazy = false,
     priority = 1000,
     config = function()
-      require("tokyonight").setup({ style = "night" })
+      require("tokyonight").setup({
+        style = "night",
+        transparent = true,
+        styles = { sidebars = "transparent", floats = "transparent" },
+      })
       vim.cmd.colorscheme("tokyonight")
     end,
   },
 
-  -- Статус-строка
   {
     "nvim-lualine/lualine.nvim",
     dependencies = { "nvim-tree/nvim-web-devicons" },
-    opts = { options = { theme = "tokyonight", globalstatus = true } },
-  },
-
-  -- Вкладки буферов сверху
-  {
-    "akinsho/bufferline.nvim",
-    dependencies = { "nvim-tree/nvim-web-devicons" },
-    opts = { options = { diagnostics = "nvim_lsp", offsets = { { filetype = "neo-tree", text = "Файлы" } } } },
-  },
-
-  -- Подсказка по клавишам: нажми <Space> и подожди
-  {
-    "folke/which-key.nvim",
-    event = "VeryLazy",
     opts = {
-      preset = "modern",
-      spec = {
-        { "<leader>f", group = "Поиск (find)" },
-        { "<leader>d", group = "Отладка (debug)" },
-        { "<leader>g", group = "Git" },
-        { "<leader>c", group = "Код" },
-        { "<leader>t", group = "Список ошибок (trouble)" },
+      options = {
+        theme = "tokyonight",
+        globalstatus = true,
+        section_separators = "",
+        component_separators = "",
+      },
+      sections = {
+        lualine_a = { "mode" },
+        lualine_b = { "branch" },
+        lualine_c = { { "filename", path = 1 } },
+        lualine_x = { "diagnostics", "filetype" },
+        lualine_y = { "progress" },
+        lualine_z = { "location" },
       },
     },
   },
 
-  -- Дерево файлов
+  {
+    "folke/which-key.nvim",
+    event = "VeryLazy",
+    opts = {
+      preset = "helix",
+      spec = {
+        { "<leader>f", group = "Поиск" },
+        { "<leader>c", group = "Код" },
+      },
+    },
+  },
+
   {
     "nvim-neo-tree/neo-tree.nvim",
     branch = "v3.x",
     dependencies = { "nvim-lua/plenary.nvim", "nvim-tree/nvim-web-devicons", "MunifTanjim/nui.nvim" },
     cmd = "Neotree",
-    keys = { { "<leader>n", "<cmd>Neotree toggle reveal<CR>", desc = "Дерево файлов" } },
-    opts = { filesystem = { follow_current_file = { enabled = true } } },
-  },
-
-  -- Плавающий терминал: Ctrl+\
-  {
-    "akinsho/toggleterm.nvim",
-    version = "*",
-    keys = { { [[<C-\>]], desc = "Терминал" } },
-    opts = { open_mapping = [[<C-\>]], direction = "float" },
-  },
-
-  -- Список всех ошибок проекта
-  {
-    "folke/trouble.nvim",
-    cmd = "Trouble",
-    opts = {},
     keys = {
-      { "<leader>tt", "<cmd>Trouble diagnostics toggle<CR>", desc = "Ошибки проекта" },
-      { "<leader>tb", "<cmd>Trouble diagnostics toggle filter.buf=0<CR>", desc = "Ошибки файла" },
-      { "<leader>ts", "<cmd>Trouble symbols toggle<CR>", desc = "Символы файла" },
+      { "<leader>e", "<cmd>Neotree toggle<CR>", desc = "Файлы" },
+    },
+    opts = {
+      close_if_last_window = true,
+      filesystem = {
+        follow_current_file = { enabled = true },
+        filtered_items = { hide_dotfiles = false, hide_gitignored = false },
+      },
+      window = { width = 30 },
     },
   },
 }
